@@ -1,0 +1,44 @@
+name: Windows build
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare verified Inno Setup compiler
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force work/tools | Out-Null
+          $file = Join-Path $PWD 'work/tools/innosetup-6.7.3.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' -OutFile $file
+          if ((Get-FileHash $file).Hash -ne '9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732') { throw 'Compiler download checksum mismatch' }
+          $signature = Get-AuthenticodeSignature $file
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Pyrsys') { throw 'Compiler signature verification failed' }
+          $dir = Join-Path $PWD 'work/tools/inno'
+          $p = Start-Process -FilePath $file -ArgumentList @('/PORTABLE=1','/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER','/NOICONS',('/DIR="'+$dir+'"')) -WindowStyle Hidden -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'Compiler extraction failed' }
+      - name: Build, test, and package
+        shell: pwsh
+        run: ./package.ps1 -IsccPath "$PWD/work/tools/inno/ISCC.exe"
+      - name: Test portable launch, installation, and uninstallation
+        shell: pwsh
+        run: ./verify-package.ps1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: TrayTidy-Windows
+          path: |
+            dist/TrayTidy-*-Portable.zip
+            dist/TrayTidy-*-Setup.exe
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14

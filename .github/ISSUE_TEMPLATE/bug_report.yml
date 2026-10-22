@@ -1,0 +1,23 @@
+name: Bug report
+description: Report a reproducible TrayTidy problem
+body:
+  - type: input
+    id: version
+    attributes:
+      label: TrayTidy and Windows versions
+      placeholder: TrayTidy 0.3.0 portable, Windows 11 x64
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps and example rules
+      description: Use synthetic filenames and paths. Do not share personal files or secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true

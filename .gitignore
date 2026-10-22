@@ -1,0 +1,9 @@
+*.exe
+*.exe.config.bak
+dist/
+work/
+data/
+portable.flag
+*.log
+.vs/
+*.user
