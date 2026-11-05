@@ -94,7 +94,7 @@ public partial class MainForm:Form {
   settings=new Settings();
   if(File.Exists(store))try{settings=json.Deserialize<Settings>(File.ReadAllText(store));Engine.Validate(settings);}catch(Exception e){MessageBox.Show("Settings could not be loaded. The app will close to preserve them.\n"+e.Message);throw;}
   BuildUI();
-  timer.Interval=5000;timer.Tick+=async delegate{await Scan();};timer.Start();RefreshFolders();UpdatePause();WriteLog("Ready. Preview rules before resuming. Configuration: "+store);
+  timer.Interval=5000;timer.Tick+=async delegate{await Scan();};RefreshFolders();UpdatePause();WriteLog("Ready. Preview rules before resuming. Configuration: "+store);
  }
  void AddButton(Control parent,string text,Action action){var b=new Button{Text=text,AutoSize=true,Height=28};b.Click+=delegate{try{action();}catch(Exception e){MessageBox.Show(e.Message,"TrayTidy");}};parent.Controls.Add(b);}
  void RefreshFolders(){folders.DataSource=null;folders.DataSource=settings.Folders;SelectFolder();}
@@ -105,7 +105,7 @@ public partial class MainForm:Form {
  bool Save(){try{if(!rules.EndEdit()||!Validate())return false;Engine.Validate(settings);Persist();SetDirty(false);WriteLog("Settings saved.");return true;}catch(Exception e){MessageBox.Show(e.Message,"Settings need attention");return false;}}
  void Persist(){PersistValue(settings);}
  void PersistValue(Settings value){Directory.CreateDirectory(System.IO.Path.GetDirectoryName(store));string temp=store+".tmp";File.WriteAllText(temp,json.Serialize(value));if(File.Exists(store))File.Replace(temp,store,store+".bak");else File.Move(temp,store);}
- void UpdatePause(){pause.Text=settings.Paused?"▶  Resume":"Ⅱ  Pause";tray.Text=settings.Paused?"TrayTidy — paused":"TrayTidy — monitoring";UpdateStatus();}
+ void UpdatePause(){timer.Enabled=!settings.Paused;pause.Text=settings.Paused?"▶  Resume":"Ⅱ  Pause";tray.Text=settings.Paused?"TrayTidy — paused":"TrayTidy — monitoring";UpdateStatus();}
  Settings Snapshot(){return json.Deserialize<Settings>(json.Serialize(settings));}
  void Preview(){if(!Save())return;var plans=Engine.Plan(Snapshot(),WriteLog);using(var d=new Form{Text="Preview — "+plans.Count+" eligible files (no files moved)",Width=950,Height=480,StartPosition=FormStartPosition.CenterParent}){var t=new TextBox{Dock=DockStyle.Fill,Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Both,WordWrap=false,Text=plans.Count==0?"No eligible files. Files must be at least 5 seconds old; rule age may require longer.":string.Join(Environment.NewLine,plans.Select(p=>p.ToString()))};d.Controls.Add(t);Theme(d);d.ShowDialog(this);}}
  async Task Scan(){if(busy||settings.Paused)return;busy=true;try{ // Only persisted settings run; unsaved grid edits cannot affect moves.
