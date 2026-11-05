@@ -32,11 +32,20 @@ public class Tests {
   using(var icon=typeof(MainForm).Assembly.GetManifestResourceStream("TrayTidy.ico")){Check(icon!=null&&icon.Length>1000,"custom multi-resolution icon embedded");}
   // Instantiate the real UI without displaying it; do not change user settings.
   string portable=Path.Combine(root,"portable");Directory.CreateDirectory(portable);string local=Path.Combine(root,"local");Check(MainForm.SettingsPath(portable,local)==Path.Combine(local,"TrayTidy","settings.json"),"installed settings use local application data");File.WriteAllText(Path.Combine(portable,"portable.flag"),"");Check(MainForm.SettingsPath(portable,local)==Path.Combine(portable,"data","settings.json"),"portable settings stay beside executable");
-  using(var ui=new MainForm(Path.Combine(root,"ui-settings.json"))){
+  string uiConfig=Path.Combine(root,"ui-settings.json");
+  using(var ui=new MainForm(uiConfig)){
+   var flags=BindingFlags.Instance|BindingFlags.NonPublic;
+   var scanTimer=(System.Windows.Forms.Timer)typeof(MainForm).GetField("timer",flags).GetValue(ui);
+   var togglePause=typeof(MainForm).GetMethod("TogglePause",flags);
+   Check(!scanTimer.Enabled,"default-paused startup leaves the scan timer disabled");
+   togglePause.Invoke(ui,null);
+   Check(scanTimer.Enabled&&scanTimer.Interval==5000&&!serializer.Deserialize<Settings>(File.ReadAllText(uiConfig)).Paused,"resume persists active state and enables the five-second scan timer");
+   togglePause.Invoke(ui,null);
+   Check(!scanTimer.Enabled&&serializer.Deserialize<Settings>(File.ReadAllText(uiConfig)).Paused,"pausing persists state and disables the scan timer");
    Check(ui.Controls.Count>0&&ui.Text.Contains("TrayTidy"),"settings form constructs");
    Check(ui.BackColor==System.Drawing.Color.FromArgb(12,16,23),"terminal dark palette applied");
    Directory.CreateDirectory(other);string second=Path.Combine(other,"second.pdf");File.WriteAllText(second,"fixture");File.SetLastWriteTimeUtc(second,DateTime.UtcNow.AddMinutes(-2));s.Folders[1].Rules.Add(new Rule{Patterns="*.pdf",Destination="Separate",MinimumAgeSeconds=0});s.Paused=false;
-   string config=Path.Combine(root,"settings.json");File.WriteAllText(config,serializer.Serialize(s));var flags=BindingFlags.Instance|BindingFlags.NonPublic;typeof(MainForm).GetField("store",flags).SetValue(ui,config);typeof(MainForm).GetField("settings",flags).SetValue(ui,s);
+   string config=Path.Combine(root,"settings.json");File.WriteAllText(config,serializer.Serialize(s));typeof(MainForm).GetField("store",flags).SetValue(ui,config);typeof(MainForm).GetField("settings",flags).SetValue(ui,s);
    var task=(System.Threading.Tasks.Task)typeof(MainForm).GetMethod("Scan",flags).Invoke(ui,null);while(!task.IsCompleted){Application.DoEvents();System.Threading.Thread.Sleep(10);}task.GetAwaiter().GetResult();
    Check(File.Exists(Path.Combine(watch,"Other","image.png"))&&File.Exists(Path.Combine(other,"Separate","second.pdf")),"background scan organizes two folders independently");
    s.Folders[0].Rules[0].Destination="Unsaved edit";typeof(MainForm).GetMethod("TogglePause",flags).Invoke(ui,null);var saved=serializer.Deserialize<Settings>(File.ReadAllText(config));Check(saved.Paused&&saved.Folders[0].Rules[0].Destination=="Docs"&&s.Folders[0].Rules[0].Destination=="Unsaved edit","pause preserves unsaved edits without committing them");
